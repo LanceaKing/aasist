@@ -15,10 +15,14 @@ pip install -r requirements.txt
   - gpu-driver: 418.67
 
 ### Data preparation
-We train/validate/evaluate AASIST using the ASVspoof 2019 logical access dataset.
+We train/validate/evaluate AASIST using the ASVspoof 2019 logical access dataset [4].
 ```
 python ./download_dataset.py
 ```
+(Alternative) Manual preparation is available via 
+- ASVspoof2019 dataset: https://datashare.ed.ac.uk/handle/10283/3336
+  1. Download `LA.zip` and unzip it
+  2. Set your dataset directory in the configuration file
 
 ### Training 
 The `main.py` includes train/validation/evaluation.
@@ -56,7 +60,7 @@ python main.py --eval --config ./config/AASIST.conf
 ```
 To evaluate AASIST-L [1]:
 - It shows `EER: 0.99%`, `min t-DCF: 0.0309`
-- Model has `85306` parameters
+- Model has `85,306` parameters
 ```
 python main.py --eval --config ./config/AASIST-L.conf
 ```
@@ -106,22 +110,24 @@ This repository is built on top of several open source projects.
 The repository for baseline RawGAT-ST model will be open
 -  https://github.com/eurecom-asp/RawGAT-ST-antispoofing
 
+The dataset we use is ASVspoof 2019 [4]
+- https://www.asvspoof.org/index2019.html
+
 ### References
 [1] AASIST: Audio Anti-Spoofing using Integrated Spectro-Temporal Graph Attention Networks
 ```bibtex
 @INPROCEEDINGS{Jung2021AASIST,
   author={Jung, Jee-weon and Heo, Hee-Soo and Tak, Hemlata and Shim, Hye-jin and Chung, Joon Son and Lee, Bong-Jin and Yu, Ha-Jin and Evans, Nicholas},
-  booktitle={arXiv}, 
+  booktitle={arXiv preprint arXiv:2110.01200}, 
   title={AASIST: Audio Anti-Spoofing using Integrated Spectro-Temporal Graph Attention Networks}, 
-  year={2021},
-  pages
+  year={2021}
 ```
 
 [2] End-to-End anti-spoofing with RawNet2
 ```bibtex
 @INPROCEEDINGS{Tak2021End,
   author={Tak, Hemlata and Patino, Jose and Todisco, Massimiliano and Nautsch, Andreas and Evans, Nicholas and Larcher, Anthony},
-  booktitle={IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}, 
+  booktitle={Proc. ICASSP}, 
   title={End-to-End anti-spoofing with RawNet2}, 
   year={2021},
   pages={6369-6373}
@@ -132,9 +138,21 @@ The repository for baseline RawGAT-ST model will be open
 ```bibtex
 @inproceedings{tak21_asvspoof,
   author={Tak, Hemlata and Jung, Jee-weon and Patino, Jose and Kamble, Madhu and Todisco, Massimiliano and Evans, Nicholas},
-  title={{End-to-end spectro-temporal graph attention networks for speaker verification anti-spoofing and speech deepfake detection}},
-  year=2021,
-  booktitle={Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge},
-  pages={1--8},
-  doi={10.21437/ASVSPOOF.2021-1}
+  booktitle={Proc. ASVSpoof Challenge},
+  title={End-to-end spectro-temporal graph attention networks for speaker verification anti-spoofing and speech deepfake detection},
+  year={2021},
+  pages={1--8}
+```
+
+[4] ASVspoof 2019: A large-scale public database of synthesized, converted and replayed speech
+```bibtex
+@article{wang2020asvspoof,
+  title={ASVspoof 2019: A large-scale public database of synthesized, converted and replayed speech},
+  author={Wang, Xin and Yamagishi, Junichi and Todisco, Massimiliano and Delgado, H{\'e}ctor and Nautsch, Andreas and Evans, Nicholas and Sahidullah, Md and Vestman, Ville and Kinnunen, Tomi and Lee, Kong Aik and others},
+  journal={Computer Speech \& Language},
+  volume={64},
+  pages={101114},
+  year={2020},
+  publisher={Elsevier}
+}
 ```
