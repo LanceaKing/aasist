@@ -411,58 +411,45 @@ class CONV(nn.Module):
 
 
 class Residual_block(nn.Module):
-    def __init__(self, nb_filts, first=False):
+    def __init__(self, nb_filts):
         super().__init__()
-        self.first = first
 
-        if not self.first:
-            self.bn1 = nn.BatchNorm2d(num_features=nb_filts[0])
         self.conv1 = nn.Conv2d(in_channels=nb_filts[0],
                                out_channels=nb_filts[1],
                                kernel_size=(2, 3),
                                padding=(1, 1),
                                stride=1)
+        self.bn1 = nn.BatchNorm2d(num_features=nb_filts[1])
         self.selu = nn.SELU(inplace=True)
-
-        self.bn2 = nn.BatchNorm2d(num_features=nb_filts[1])
         self.conv2 = nn.Conv2d(in_channels=nb_filts[1],
                                out_channels=nb_filts[1],
                                kernel_size=(2, 3),
                                padding=(0, 1),
                                stride=1)
 
+        self.downsample = None
         if nb_filts[0] != nb_filts[1]:
-            self.downsample = True
-            self.conv_downsample = nn.Conv2d(in_channels=nb_filts[0],
-                                             out_channels=nb_filts[1],
-                                             padding=(0, 1),
-                                             kernel_size=(1, 3),
-                                             stride=1)
+            self.downsample = nn.Conv2d(in_channels=nb_filts[0],
+                                        out_channels=nb_filts[1],
+                                        padding=(0, 1),
+                                        kernel_size=(1, 3),
+                                        stride=1)
 
-        else:
-            self.downsample = False
-        self.mp = nn.MaxPool2d((1, 3))  # self.mp = nn.MaxPool2d((1,4))
+        self.maxpool = nn.MaxPool2d((1, 3))  # self.mp = nn.MaxPool2d((1,4))
 
     def forward(self, x):
         identity = x
-        if not self.first:
-            out = self.bn1(x)
-            out = self.selu(out)
-        else:
-            out = x
-        out = self.conv1(x)
 
-        # print('out',out.shape)
-        out = self.bn2(out)
+        out = self.conv1(x)
+        out = self.bn1(out)
         out = self.selu(out)
-        # print('out',out.shape)
         out = self.conv2(out)
-        #print('conv2 out',out.shape)
-        if self.downsample:
-            identity = self.conv_downsample(identity)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
         out += identity
-        out = self.mp(out)
+        out = self.maxpool(out)
         return out
 
 
@@ -486,12 +473,12 @@ class Model(nn.Module):
         self.selu = nn.SELU(inplace=True)
 
         self.encoder = nn.Sequential(
-            nn.Sequential(Residual_block(nb_filts=filts[1], first=True)),
-            nn.Sequential(Residual_block(nb_filts=filts[2])),
-            nn.Sequential(Residual_block(nb_filts=filts[3])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])))
+            Residual_block(nb_filts=filts[1]),
+            Residual_block(nb_filts=filts[2]),
+            Residual_block(nb_filts=filts[3]),
+            Residual_block(nb_filts=filts[4]),
+            Residual_block(nb_filts=filts[4]),
+            Residual_block(nb_filts=filts[4]))
 
         self.pos_S = nn.Parameter(torch.randn(1, 23, filts[-1][-1]))
         self.master1 = nn.Parameter(torch.randn(1, 1, gat_dims[0]))

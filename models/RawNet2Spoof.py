@@ -104,14 +104,8 @@ class SincConv(nn.Module):
 
 
 class Residual_block(nn.Module):
-    def __init__(self, nb_filts, first=False):
+    def __init__(self, nb_filts):
         super(Residual_block, self).__init__()
-        self.first = first
-
-        if not self.first:
-            self.bn1 = nn.BatchNorm1d(num_features=nb_filts[0])
-
-        self.lrelu = nn.LeakyReLU(negative_slope=0.3)
 
         self.conv1 = nn.Conv1d(
             in_channels=nb_filts[0],
@@ -120,8 +114,8 @@ class Residual_block(nn.Module):
             padding=1,
             stride=1,
         )
-
-        self.bn2 = nn.BatchNorm1d(num_features=nb_filts[1])
+        self.bn1 = nn.BatchNorm1d(num_features=nb_filts[1])
+        self.lrelu = nn.LeakyReLU(negative_slope=0.3)
         self.conv2 = nn.Conv1d(
             in_channels=nb_filts[1],
             out_channels=nb_filts[1],
@@ -130,9 +124,9 @@ class Residual_block(nn.Module):
             stride=1,
         )
 
+        self.downsample = None
         if nb_filts[0] != nb_filts[1]:
-            self.downsample = True
-            self.conv_downsample = nn.Conv1d(
+            self.downsample = nn.Conv1d(
                 in_channels=nb_filts[0],
                 out_channels=nb_filts[1],
                 padding=0,
@@ -140,28 +134,21 @@ class Residual_block(nn.Module):
                 stride=1,
             )
 
-        else:
-            self.downsample = False
-        self.mp = nn.MaxPool1d(3)
+        self.maxpool = nn.MaxPool1d(3)
 
     def forward(self, x):
         identity = x
-        if not self.first:
-            out = self.bn1(x)
-            out = self.lrelu(out)
-        else:
-            out = x
 
         out = self.conv1(x)
-        out = self.bn2(out)
+        out = self.bn1(out)
         out = self.lrelu(out)
         out = self.conv2(out)
 
-        if self.downsample:
-            identity = self.conv_downsample(identity)
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
         out += identity
-        out = self.mp(out)
+        out = self.maxpool(out)
         return out
 
 
@@ -180,39 +167,33 @@ class Model(nn.Module):
 
         self.first_bn = nn.BatchNorm1d(num_features=d_args["filts"][0])
         self.selu = nn.SELU(inplace=True)
-        self.block0 = nn.Sequential(
-            Residual_block(nb_filts=d_args["filts"][1], first=True))
-        self.block1 = nn.Sequential(
-            Residual_block(nb_filts=d_args["filts"][1]))
-        self.block2 = nn.Sequential(
-            Residual_block(nb_filts=d_args["filts"][2]))
+        self.block0 = Residual_block(nb_filts=d_args["filts"][1])
+        self.block1 = Residual_block(nb_filts=d_args["filts"][1])
+        self.block2 = Residual_block(nb_filts=d_args["filts"][2])
         d_args["filts"][2][0] = d_args["filts"][2][1]
-        self.block3 = nn.Sequential(
-            Residual_block(nb_filts=d_args["filts"][2]))
-        self.block4 = nn.Sequential(
-            Residual_block(nb_filts=d_args["filts"][2]))
-        self.block5 = nn.Sequential(
-            Residual_block(nb_filts=d_args["filts"][2]))
+        self.block3 = Residual_block(nb_filts=d_args["filts"][2])
+        self.block4 = Residual_block(nb_filts=d_args["filts"][2])
+        self.block5 = Residual_block(nb_filts=d_args["filts"][2])
         self.avgpool = nn.AdaptiveAvgPool1d(1)
 
-        self.fc_attention0 = self._make_attention_fc(
+        self.fc_attention0 = nn.Linear(
             in_features=d_args["filts"][1][-1],
-            l_out_features=d_args["filts"][1][-1])
-        self.fc_attention1 = self._make_attention_fc(
+            out_features=d_args["filts"][1][-1])
+        self.fc_attention1 = nn.Linear(
             in_features=d_args["filts"][1][-1],
-            l_out_features=d_args["filts"][1][-1])
-        self.fc_attention2 = self._make_attention_fc(
+            out_features=d_args["filts"][1][-1])
+        self.fc_attention2 = nn.Linear(
             in_features=d_args["filts"][2][-1],
-            l_out_features=d_args["filts"][2][-1])
-        self.fc_attention3 = self._make_attention_fc(
+            out_features=d_args["filts"][2][-1])
+        self.fc_attention3 = nn.Linear(
             in_features=d_args["filts"][2][-1],
-            l_out_features=d_args["filts"][2][-1])
-        self.fc_attention4 = self._make_attention_fc(
+            out_features=d_args["filts"][2][-1])
+        self.fc_attention4 = nn.Linear(
             in_features=d_args["filts"][2][-1],
-            l_out_features=d_args["filts"][2][-1])
-        self.fc_attention5 = self._make_attention_fc(
+            out_features=d_args["filts"][2][-1])
+        self.fc_attention5 = nn.Linear(
             in_features=d_args["filts"][2][-1],
-            l_out_features=d_args["filts"][2][-1])
+            out_features=d_args["filts"][2][-1])
 
         self.bn_before_gru = nn.BatchNorm1d(
             num_features=d_args["filts"][2][-1])
@@ -305,23 +286,3 @@ class Model(nn.Module):
         output = self.logsoftmax(x)
 
         return output
-
-    def _make_attention_fc(self, in_features, l_out_features):
-
-        l_fc = []
-
-        l_fc.append(
-            nn.Linear(in_features=in_features, out_features=l_out_features))
-
-        return nn.Sequential(*l_fc)
-
-    def _make_layer(self, nb_blocks, nb_filts, first=False):
-        layers = []
-        # def __init__(self, nb_filts, first = False):
-        for i in range(nb_blocks):
-            first = first if i == 0 else False
-            layers.append(Residual_block(nb_filts=nb_filts, first=first))
-            if i == 0:
-                nb_filts[0] = nb_filts[1]
-
-        return nn.Sequential(*layers)

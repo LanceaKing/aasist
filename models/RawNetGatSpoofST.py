@@ -223,58 +223,45 @@ class CONV(nn.Module):
 
 
 class Residual_block(nn.Module):
-    def __init__(self, nb_filts, first=False):
+    def __init__(self, nb_filts):
         super().__init__()
-        self.first = first
 
-        if not self.first:
-            self.bn1 = nn.BatchNorm2d(num_features=nb_filts[0])
         self.conv1 = nn.Conv2d(in_channels=nb_filts[0],
                                out_channels=nb_filts[1],
                                kernel_size=(2, 3),
                                padding=(1, 1),
                                stride=1)
+        self.bn1 = nn.BatchNorm2d(num_features=nb_filts[1])
         self.selu = nn.SELU(inplace=True)
-
-        self.bn2 = nn.BatchNorm2d(num_features=nb_filts[1])
         self.conv2 = nn.Conv2d(in_channels=nb_filts[1],
                                out_channels=nb_filts[1],
                                kernel_size=(2, 3),
                                padding=(0, 1),
                                stride=1)
 
+        self.downsample = None
         if nb_filts[0] != nb_filts[1]:
-            self.downsample = True
-            self.conv_downsample = nn.Conv2d(in_channels=nb_filts[0],
-                                             out_channels=nb_filts[1],
-                                             padding=(0, 1),
-                                             kernel_size=(1, 3),
-                                             stride=1)
+            self.downsample = nn.Conv2d(in_channels=nb_filts[0],
+                                        out_channels=nb_filts[1],
+                                        padding=(0, 1),
+                                        kernel_size=(1, 3),
+                                        stride=1)
 
-        else:
-            self.downsample = False
-        self.mp = nn.MaxPool2d((1, 3))  # self.mp = nn.MaxPool2d((1,4))
+        self.maxpool = nn.MaxPool2d((1, 3))  # self.mp = nn.MaxPool2d((1,4))
 
     def forward(self, x):
         identity = x
-        if not self.first:
-            out = self.bn1(x)
-            out = self.selu(out)
-        else:
-            out = x
-        out = self.conv1(x)
 
-        # print('out',out.shape)
-        out = self.bn2(out)
+        out = self.conv1(x)
+        out = self.bn1(out)
         out = self.selu(out)
-        # print('out',out.shape)
         out = self.conv2(out)
-        #print('conv2 out',out.shape)
-        if self.downsample:
-            identity = self.conv_downsample(identity)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
         out += identity
-        out = self.mp(out)
+        out = self.maxpool(out)
         return out
 
 
@@ -292,32 +279,32 @@ class Model(nn.Module):
 
         self.selu = nn.SELU(inplace=True)
 
-        self.encoder_T = nn.Sequential(
-            nn.Sequential(Residual_block(nb_filts=filts[1], first=True)),
-            nn.Sequential(Residual_block(nb_filts=filts[2])),
-            nn.Sequential(Residual_block(nb_filts=filts[3])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])))
-
         self.encoder_S = nn.Sequential(
-            nn.Sequential(Residual_block(nb_filts=filts[1], first=True)),
-            nn.Sequential(Residual_block(nb_filts=filts[2])),
-            nn.Sequential(Residual_block(nb_filts=filts[3])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])),
-            nn.Sequential(Residual_block(nb_filts=filts[4])))
+            Residual_block(nb_filts=filts[1]),
+            Residual_block(nb_filts=filts[2]),
+            Residual_block(nb_filts=filts[3]),
+            Residual_block(nb_filts=filts[4]),
+            Residual_block(nb_filts=filts[4]),
+            Residual_block(nb_filts=filts[4]))
 
-        self.GAT_layer_T = GraphAttentionLayer(64, 32)
+        self.encoder_T = nn.Sequential(
+            Residual_block(nb_filts=filts[1]),
+            Residual_block(nb_filts=filts[2]),
+            Residual_block(nb_filts=filts[3]),
+            Residual_block(nb_filts=filts[4]),
+            Residual_block(nb_filts=filts[4]),
+            Residual_block(nb_filts=filts[4]))
+
         self.GAT_layer_S = GraphAttentionLayer(64, 32)
+        self.GAT_layer_T = GraphAttentionLayer(64, 32)
         self.GAT_layer_ST = GraphAttentionLayer(32, 16)
 
-        self.pool_T = GraphPool(0.64, 32, 0.3)
-        self.pool_S = GraphPool(0.81, 32, 0.3)
+        self.pool_S = GraphPool(0.64, 32, 0.3)
+        self.pool_T = GraphPool(0.81, 32, 0.3)
         self.pool_ST = GraphPool(0.64, 16, 0.3)
 
-        self.proj_T = nn.Linear(14, 12)
-        self.proj_S = nn.Linear(23, 12)
+        self.proj_S = nn.Linear(14, 12)
+        self.proj_T = nn.Linear(23, 12)
         self.proj_ST = nn.Linear(16, 1)
         self.out_layer = nn.Linear(7, 2)
 
@@ -334,17 +321,17 @@ class Model(nn.Module):
         x = self.first_bn(x)
         x = self.selu(x)
 
-        e_T = self.encoder_T(x)  # (#bs, #filt, #spec, #seq)
-        e_T, _ = torch.max(torch.abs(e_T), dim=3)  # max along time
-        gat_T = self.GAT_layer_T(e_T.transpose(1, 2))
-        pool_T = self.pool_T(gat_T)  # (#bs, #node, #dim)
-        out_T = self.proj_T(pool_T.transpose(1, 2))
-
-        e_S = self.encoder_S(x)
-        e_S, _ = torch.max(torch.abs(e_S), dim=2)  # max along freq
+        e_S = self.encoder_S(x)  # (#bs, #filt, #spec, #seq)
+        e_S = torch.amax(torch.abs(e_S), dim=3)  # max along time
         gat_S = self.GAT_layer_S(e_S.transpose(1, 2))
-        pool_S = self.pool_S(gat_S)
+        pool_S = self.pool_S(gat_S)  # (#bs, #node, #dim)
         out_S = self.proj_S(pool_S.transpose(1, 2))
+
+        e_T = self.encoder_T(x)
+        e_T = torch.amax(torch.abs(e_T), dim=2)  # max along freq
+        gat_T = self.GAT_layer_T(e_T.transpose(1, 2))
+        pool_T = self.pool_T(gat_T)
+        out_T = self.proj_T(pool_T.transpose(1, 2))
 
         gat_ST = torch.mul(out_T, out_S)
 
